@@ -1,7 +1,7 @@
 window.BUTLER_CONFIG = {
   // ---- Butler AI (any OpenAI-compatible API). Default: Google Gemini (free tier) ----
   AI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai",
-  AI_MODEL: "gemini-2.5-flash-lite",
+  AI_MODEL: "gemini-flash-lite-latest",
   AI_KEY: "",  // leave empty: paste your key in the app (⚙ AI key) so it never goes on GitHub
  
   // ---- Sync across devices (optional, same Supabase project as Grit 75 works) ----
