@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17171a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Calendar Butler</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#77756e;--ac:#3b5bdb;--acs:#e7ecff;--bd:#e4e2da;--today:#ffe9a8}
+@media(prefers-color-scheme:dark){:root{--bg:#17171a;--card:#222226;--tx:#efeee9;--mut:#9a98a0;--ac:#7c93ff;--acs:#2a3050;--bd:#33333a;--today:#4a3f12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.w{max-width:880px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:baseline}
+h1{font-size:20px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:14px}
+input,button{font:inherit;color:var(--tx)}
+input{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:9px 11px}
+button{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:9px 14px;cursor:pointer}
+button.g{background:var(--acs);color:var(--ac)}button:disabled{opacity:.5}
+.hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.hd b{font-size:17px}
+.gr{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dn{text-align:center;color:var(--mut);font-size:12px;padding:4px 0}
+.d{min-height:58px;border:1px solid var(--bd);border-radius:8px;padding:4px;cursor:pointer;overflow:hidden;font-size:12px}
+.d.o{opacity:.4}.d.t{background:var(--today)}.d.s{outline:2px solid var(--ac)}
+.d i{display:block;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--acs);color:var(--ac);border-radius:4px;padding:0 3px;margin-top:2px;font-size:11px}
+.ev{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd)}.ev:last-child{border:0}
+.ev small,.mut{color:var(--mut)}.mut{font-size:12px}
+.x{background:none;color:var(--mut);padding:2px 8px}
+.add{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.add input{flex:1;min-width:90px}
+#log{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.m{padding:8px 11px;border-radius:12px;max-width:88%;white-space:pre-wrap}
+.m.u{align-self:flex-end;background:var(--ac);color:#fff}.m.a{align-self:flex-start;background:var(--acs)}
+.br{display:flex;gap:6px}.br input{flex:1;min-width:0}.rec{background:#e03131!important;color:#fff!important}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.card input.f{width:100%;margin-top:6px}
+@media(max-width:520px){.d{min-height:46px}.d i{display:none}.d.h::after{content:"•";color:var(--ac)}}
+</style>
+</head>
+<body>
+<div class="w">
+<div class="top"><h1>📅 Calendar Butler</h1><span class="mut" id="sync">saved on this device</span></div>
+
+<div class="card" id="bt">
+  <b>🎩 Butler</b>
+  <div id="log"><div class="m a">Good day. Tell me what to schedule, move or cancel, or ask what's coming up.</div></div>
+  <div class="br"><input id="bi" placeholder="Gym tomorrow 6am, lecture Fri 10-12"><button class="g" id="mic">🎤</button><button class="g" id="spk">🔇</button><button id="bs">Send</button></div>
+  <div class="row"><button class="g" id="plan">Plan my week</button></div>
+</div>
+
+<div class="card">
+  <div class="hd"><button class="g" id="pv">‹</button><b id="ttl"></b><button class="g" id="nx">›</button></div>
+  <div class="gr" id="gr"></div>
+</div>
+
+<div class="card">
+  <b id="sel"></b><div id="list"></div>
+  <div class="add"><input id="nt" placeholder="Event title"><input id="ns" type="time"><input id="ne" type="time"><button id="na">Add</button></div>
+</div>
+
+<div class="card">
+  <b>☁ Sync across devices</b>
+  <div id="out"><input class="f" id="em" type="email" placeholder="Email" autocomplete="email"><input class="f" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+    <div class="row"><button id="si">Sign in</button><button class="g" id="su">Create account</button></div></div>
+  <div id="inn" style="display:none"><p class="mut" id="who"></p><button class="g" id="so">Sign out</button></div>
+  <p class="mut" id="amsg"></p>
+</div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),pad=n=>String(n).padStart(2,"0");
+const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const esc=s=>{const d=document.createElement("div");d.textContent=s;return d.innerHTML};
+const C=window.BUTLER_CONFIG||{};
+let ev=[],T=0,view=new Date(),sel=key(new Date());view.setDate(1);
+try{const x=JSON.parse(localStorage.getItem("cal")||"null");if(x){ev=x.ev||[];T=x.t||0}}catch(e){}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+/* ---- storage + sync ---- */
+let sb=null,user=null,timer=null;
+if(window.supabase&&C.SUPABASE_URL&&!C.SUPABASE_URL.includes("YOUR-")){sb=window.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY)}
+const status=t=>$("sync").textContent=t;
+async function push(){
+  if(!sb||!user)return;
+  const {error}=await sb.from("calendar_state").upsert({user_id:user.id,data:{ev,t:T},updated_at:new Date().toISOString()});
+  status(error?"sync failed, saved on device":"☁ synced");
+}
+async function pull(){
+  if(!sb||!user)return;
+  const {data,error}=await sb.from("calendar_state").select("data").eq("user_id",user.id).maybeSingle();
+  if(error){status("sync failed, saved on device");return}
+  if(data&&data.data&&(data.data.t||0)>T){ev=data.data.ev||[];T=data.data.t;localStorage.setItem("cal",JSON.stringify({ev,t:T}))}
+  render();status("☁ synced");
+}
+function save(){
+  T=Date.now();
+  try{localStorage.setItem("cal",JSON.stringify({ev,t:T}))}catch(e){}
+  if(sb&&user){clearTimeout(timer);timer=setTimeout(push,700)}
+}
+
+/* ---- calendar ---- */
+const byTime=(a,b)=>(a.start||"").localeCompare(b.start||"");
+function render(){
+  const y=view.getFullYear(),m=view.getMonth();
+  $("ttl").textContent=view.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  let h=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dn">${d}</div>`).join("");
+  const off=(new Date(y,m,1).getDay()+6)%7,start=new Date(y,m,1-off),tk=key(new Date());
+  for(let i=0;i<42;i++){
+    const d=new Date(start);d.setDate(start.getDate()+i);const k=key(d);
+    const es=ev.filter(e=>e.date===k).sort(byTime);
+    h+=`<div class="d${d.getMonth()!==m?" o":""}${k===tk?" t":""}${k===sel?" s":""}${es.length?" h":""}" data-k="${k}">${d.getDate()}${es.slice(0,2).map(e=>`<i>${esc(e.title)}</i>`).join("")}</div>`;
+  }
+  $("gr").innerHTML=h;
+  $("gr").querySelectorAll(".d").forEach(c=>c.onclick=()=>{sel=c.dataset.k;render()});
+  $("sel").textContent=new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
+  const es=ev.filter(e=>e.date===sel).sort(byTime);
+  $("list").innerHTML=es.length?es.map(e=>`<div class="ev"><div>${esc(e.title)}<br><small>${e.start?esc(e.start)+(e.end?" – "+esc(e.end):""):"All day"}</small></div><button class="x" data-id="${e.id}">✕</button></div>`).join(""):'<p class="mut">Nothing planned.</p>';
+  $("list").querySelectorAll(".x").forEach(b=>b.onclick=()=>{ev=ev.filter(e=>e.id!==b.dataset.id);save();render()});
+}
+$("pv").onclick=()=>{view.setMonth(view.getMonth()-1);render()};
+$("nx").onclick=()=>{view.setMonth(view.getMonth()+1);render()};
+$("na").onclick=()=>{const t=$("nt").value.trim();if(!t)return;ev.push({id:uid(),title:t,date:sel,start:$("ns").value,end:$("ne").value});$("nt").value="";save();render()};
+
+/* ---- butler (any OpenAI-compatible API) ---- */
+let hist=[],talk=false;
+const ctx=()=>{const n=new Date();return "Today is "+n.toLocaleDateString("en-AU",{weekday:"long",day:"numeric",month:"long",year:"numeric"})+" ("+key(n)+"). Weeks start Monday."};
+function bubble(t,c){const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("log").appendChild(d);$("log").scrollTop=1e9;return d}
+function speak(t){if(!talk)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="en-AU";speechSynthesis.speak(u)}catch(e){}}
+const fn=(name,description,properties,required)=>({type:"function",function:{name,description,parameters:{type:"object",properties,required}}});
+const TOOLS=[
+ fn("add_event","Add a calendar event",{title:{type:"string"},date:{type:"string",description:"YYYY-MM-DD"},start:{type:"string",description:"HH:MM 24h or empty"},end:{type:"string",description:"HH:MM 24h or empty"}},["title","date"]),
+ fn("update_event","Change an existing event by id",{id:{type:"string"},title:{type:"string"},date:{type:"string"},start:{type:"string"},end:{type:"string"}},["id"]),
+ fn("delete_event","Delete an event by id",{id:{type:"string"}},["id"])
+];
+const RUN={
+ add_event(i){ev.push({id:uid(),title:String(i.title).slice(0,80),date:i.date,start:i.start||"",end:i.end||""});sel=i.date;view=new Date(i.date+"T00:00");view.setDate(1);return "added"},
+ update_event(i){const e=ev.find(x=>x.id===i.id);if(!e)return "no such id";["title","date","start","end"].forEach(k=>{if(i[k]!==undefined)e[k]=i[k]});return "updated"},
+ delete_event(i){const n=ev.length;ev=ev.filter(e=>e.id!==i.id);return n-ev.length?"deleted":"no such id"}
+};
+async function ask(userText){
+  if(!C.AI_KEY||C.AI_KEY.includes("YOUR-"))throw new Error("no key");
+  const a=new Date(),lo=new Date(),hi=new Date();lo.setDate(a.getDate()-7);hi.setDate(a.getDate()+45);
+  const near=ev.filter(e=>e.date>=key(lo)&&e.date<=key(hi));
+  const msgs=[{role:"system",content:"You are a polite, concise butler managing the user's calendar. "+ctx()+" Current events (JSON): "+JSON.stringify(near)+". Use the tools to add, update or delete events; never invent ids; expand repeats for the next 4 weeks; use 24h times. Reply in 1-3 short sentences."},...hist,{role:"user",content:userText}];
+  for(let r=0;r<5;r++){
+    const res=await fetch(C.AI_BASE_URL.replace(/\/$/,"")+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+C.AI_KEY},body:JSON.stringify({model:C.AI_MODEL,messages:msgs,tools:TOOLS})});
+    if(!res.ok)throw new Error("http "+res.status);
+    const m=(await res.json()).choices[0].message;
+    msgs.push(m);
+    if(!m.tool_calls||!m.tool_calls.length)return m.content||"Done.";
+    for(const tc of m.tool_calls){
+      let out="error";
+      try{out=RUN[tc.function.name](JSON.parse(tc.function.arguments||"{}"))}catch(e){}
+      msgs.push({role:"tool",tool_call_id:tc.id,content:out});
+    }
+    save();render();
+  }
+  return "Done.";
+}
+async function send(t){
+  if(!t)return;
+  try{speechSynthesis.cancel()}catch(e){}
+  bubble(t,"u");$("bs").disabled=true;$("plan").disabled=true;
+  const out=bubble("…","a");
+  try{
+    const r=await ask(t);out.textContent=r;speak(r);
+    hist.push({role:"user",content:t},{role:"assistant",content:r});hist=hist.slice(-8);
+  }catch(e){out.textContent=String(e.message).includes("no key")?"I need an AI key first. Add it to config.js (see README).":String(e.message).includes("429")?"Too many requests, give it a moment.":"My apologies, something went wrong ("+e.message+")."}
+  $("bs").disabled=false;$("plan").disabled=false;
+}
+$("bs").onclick=()=>{const t=$("bi").value.trim();$("bi").value="";send(t)};
+$("bi").addEventListener("keydown",e=>{if(e.key==="Enter")$("bs").click()});
+$("plan").onclick=()=>send("Plan my next 7 days: flag clashes or overloaded days, point out free blocks, and suggest 2-3 things to schedule (study, exercise, rest). Max 120 words, plain text.");
+$("spk").onclick=()=>{talk=!talk;$("spk").textContent=talk?"🔊":"🔇";if(!talk){try{speechSynthesis.cancel()}catch(e){}}};
+if(!window.speechSynthesis)$("spk").style.display="none";
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR)$("mic").style.display="none";
+else{
+  let rec=null,on=false;
+  $("mic").onclick=()=>{
+    if(on){rec&&rec.stop();return}
+    try{
+      rec=new SR();rec.lang="en-AU";rec.interimResults=true;rec.continuous=false;
+      rec.onstart=()=>{on=true;$("mic").classList.add("rec");$("bi").placeholder="Listening…"};
+      rec.onresult=e=>{let t="";for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;$("bi").value=t;
+        if(e.results[e.results.length-1].isFinal){talk=true;$("spk").textContent="🔊";$("bs").click()}};
+      rec.onerror=e=>{$("bi").placeholder=(e.error==="not-allowed"||e.error==="service-not-allowed")?"Mic blocked, allow access or type":"Didn't catch that"};
+      rec.onend=()=>{on=false;$("mic").classList.remove("rec");if($("bi").placeholder==="Listening…")$("bi").placeholder="Gym tomorrow 6am, lecture Fri 10-12"};
+      rec.start();
+    }catch(e){$("bi").placeholder="Voice unavailable, type instead"}
+  };
+}
+
+/* ---- account ---- */
+function acct(u){user=u;$("out").style.display=u?"none":"block";$("inn").style.display=u?"block":"none";$("who").textContent=u?"Signed in as "+u.email:""}
+async function auth(kind){
+  if(!sb){$("amsg").textContent="Sync isn't set up yet. Add your Supabase details in config.js.";return}
+  const cred={email:$("em").value.trim(),password:$("pw").value};
+  const r=kind==="in"?await sb.auth.signInWithPassword(cred):await sb.auth.signUp(cred);
+  if(r.error){$("amsg").textContent=r.error.message;return}
+  $("amsg").textContent=kind==="up"&&!r.data.session?"Check your email to confirm, then sign in.":"";
+  if(r.data.session){acct(r.data.session.user);await pull();save()}
+}
+$("si").onclick=()=>auth("in");$("su").onclick=()=>auth("up");
+$("so").onclick=async()=>{await sb.auth.signOut();acct(null);status("saved on this device")};
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)pull()});
+render();
+(async()=>{if(!sb)return;const {data}=await sb.auth.getSession();if(data.session){acct(data.session.user);await pull()}})();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
