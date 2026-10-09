@@ -60,6 +60,7 @@ button.g{background:var(--acs);color:var(--ac)}button:disabled{opacity:.5}
 <div class="card">
   <b id="sel"></b><div id="list"></div>
   <div class="add"><input id="nt" placeholder="Event title"><input id="ns" type="time"><input id="ne" type="time"><button id="na">Add</button></div>
+  <div class="row" style="margin-top:8px"><button class="g" id="ex">⬇ Export all to my calendar (.ics)</button></div>
 </div>
 
 <div class="card">
@@ -120,9 +121,42 @@ function render(){
   $("gr").querySelectorAll(".d").forEach(c=>c.onclick=()=>{sel=c.dataset.k;render()});
   $("sel").textContent=new Date(sel+"T00:00").toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
   const es=ev.filter(e=>e.date===sel).sort(byTime);
-  $("list").innerHTML=es.length?es.map(e=>`<div class="ev"><div>${esc(e.title)}<br><small>${e.start?esc(e.start)+(e.end?" – "+esc(e.end):""):"All day"}</small></div><button class="x" data-id="${e.id}">✕</button></div>`).join(""):'<p class="mut">Nothing planned.</p>';
-  $("list").querySelectorAll(".x").forEach(b=>b.onclick=()=>{ev=ev.filter(e=>e.id!==b.dataset.id);save();render()});
+  $("list").innerHTML=es.length?es.map(e=>`<div class="ev"><div>${esc(e.title)}<br><small>${e.start?esc(e.start)+(e.end?" – "+esc(e.end):""):"All day"}</small></div><span style="white-space:nowrap"><button class="x gc" data-id="${e.id}" title="Add to Google Calendar">📆</button><button class="x" data-id="${e.id}">✕</button></span></div>`).join(""):'<p class="mut">Nothing planned.</p>';
+  $("list").querySelectorAll(".x:not(.gc)").forEach(b=>b.onclick=()=>{ev=ev.filter(e=>e.id!==b.dataset.id);save();render()});
+  $("list").querySelectorAll(".gc").forEach(b=>b.onclick=()=>gcal(ev.find(e=>e.id===b.dataset.id)));
 }
+/* ---- export to Google / phone calendar ---- */
+const ymd=d=>d.replace(/-/g,""),hm=t=>t.replace(":","")+"00";
+function span(e){
+  if(!e.start){const n=new Date(e.date+"T00:00");n.setDate(n.getDate()+1);return [ymd(e.date),ymd(key(n)),true]}
+  let en=e.end||"";
+  if(!en||en<=e.start){const p=e.start.split(":").map(Number);en=p[0]>=23?"23:59":pad(p[0]+1)+":"+pad(p[1])}
+  return [ymd(e.date)+"T"+hm(e.start),ymd(e.date)+"T"+hm(en),false];
+}
+function gcal(e){
+  if(!e)return;
+  const r=span(e);
+  window.open("https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title)+"&dates="+r[0]+"/"+r[1],"_blank");
+}
+function exportIcs(){
+  if(!ev.length){alert("No events to export yet.");return}
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Calendar Butler//EN","CALSCALE:GREGORIAN"];
+  const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  ev.forEach(e=>{
+    const r=span(e);
+    L.push("BEGIN:VEVENT","UID:"+e.id+"@calendar-butler","DTSTAMP:"+stamp,
+      r[2]?"DTSTART;VALUE=DATE:"+r[0]:"DTSTART:"+r[0],
+      r[2]?"DTEND;VALUE=DATE:"+r[1]:"DTEND:"+r[1],
+      "SUMMARY:"+String(e.title).replace(/[\\;,]/g,"\\$&"),
+      "BEGIN:VALARM","TRIGGER:-PT15M","ACTION:DISPLAY","DESCRIPTION:Reminder","END:VALARM","END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([L.join("\r\n")],{type:"text/calendar"}));
+  a.download="calendar-butler.ics";document.body.appendChild(a);a.click();a.remove();
+}
+$("ex").onclick=exportIcs;
+
 $("pv").onclick=()=>{view.setMonth(view.getMonth()-1);render()};
 $("nx").onclick=()=>{view.setMonth(view.getMonth()+1);render()};
 $("na").onclick=()=>{const t=$("nt").value.trim();if(!t)return;ev.push({id:uid(),title:t,date:sel,start:$("ns").value,end:$("ne").value});$("nt").value="";save();render()};
